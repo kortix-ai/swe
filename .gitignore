@@ -40,3 +40,4 @@ new_agentpress/
 .vscode/
 output/
 .venv/
+**/.prompts/

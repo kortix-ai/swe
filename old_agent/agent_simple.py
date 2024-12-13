@@ -81,11 +81,11 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
     problem_statement = instance_data['problem_statement']
     instance_id = instance_data['instance_id']
 
-    from tools.repo_tool import RepositoryTools
+    from agents.old_tools.repo_tool import RepositoryTools
     thread_manager.add_tool(RepositoryTools, container_name=container_name, state_file=state_file)
 
     from tools.edit_tool import EditTool
-    from tools.bash_tool import BashTool
+    from agents.old_tools.bash_tool import BashTool
     thread_manager.add_tool(EditTool, container_name=container_name, state_file=state_file)
     thread_manager.add_tool(BashTool, container_name=container_name, state_file=state_file)
 
