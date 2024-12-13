@@ -39,3 +39,4 @@ new_agentpress/
 *.zip
 .vscode/
 output/
+.venv/
