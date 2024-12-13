@@ -167,10 +167,18 @@ def main():
 
     streamlit_process = None
     if not args.disable_streamlit:
-        from streamlit_runner import StreamlitRunner
-        streamlit_process = StreamlitRunner()
-        streamlit_process.run(args.output_dir)
-        print("Streamlit app started for real-time visualization.")
+        # Run streamlit as a subprocess instead of importing
+        streamlit_cmd = [
+            sys.executable, 
+            "-m", 
+            # "swe_bench.streamlit_runner",
+            "streamlit",
+            "run",
+            "app.py",
+            # "--output-dir", os.path.abspath(args.output_dir)
+        ]
+        streamlit_process = subprocess.Popen(streamlit_cmd)
+        print(f"Streamlit app started for real-time visualization. Monitoring: {args.output_dir}")
 
     if not args.only_eval:
         # Run inference.py

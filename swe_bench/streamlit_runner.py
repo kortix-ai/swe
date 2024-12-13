@@ -13,7 +13,9 @@ class StreamlitRunner:
         # Get the absolute path to streamlit_dashboard.py
         dashboard_path = os.path.join(os.path.dirname(__file__), "streamlit_dashboard.py")
         # Start Streamlit as a separate process
-        cmd = [sys.executable, "-m", "streamlit", "run", dashboard_path, "--", output_dir]
+        cmd = [sys.executable, "-m", "streamlit", "run", dashboard_path,
+               "--", "--output-dir", output_dir]
+
         self.process = subprocess.Popen(cmd)
 
     def stop(self):
@@ -44,19 +46,20 @@ class StreamlitRunner:
 
 def main():
     parser = argparse.ArgumentParser(description='Run Streamlit dashboard for SWE Bench visualization')
-    parser.add_argument('--output-dir', default='./outputs', 
-                      help='Directory containing the output files (default: ./outputs)')
+    parser.add_argument('--output-dir', default=os.path.expanduser('~/swe/outputs'), 
+                      help='Directory containing the output files (default: ~/swe/outputs)')
     args = parser.parse_args()
 
-    # Create output directory if it doesn't exist
-    os.makedirs(args.output_dir, exist_ok=True)
-    
+    # Convert to absolute path and create if needed
+    output_dir = os.path.abspath(os.path.expanduser(args.output_dir))
+    os.makedirs(output_dir, exist_ok=True)
+        
     # Start the Streamlit dashboard
     runner = StreamlitRunner()
-    runner.run(args.output_dir)
+    runner.run(output_dir)
     
     try:
-        print(f"Streamlit dashboard started. Monitoring directory: {args.output_dir}")
+        print(f"Streamlit dashboard started. Monitoring directory: {output_dir}")
         print("Press Ctrl+C to stop...")
         while True:
             time.sleep(1)

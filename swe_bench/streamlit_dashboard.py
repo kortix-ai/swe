@@ -276,8 +276,8 @@ def main():
         st.title("📊 SWE Bench")
     
         # Collect available output directories
-        archives_dir = 'archives/'
-        options = ['./outputs']
+        archives_dir = '~/swe/archives/'
+        options = ['~/swe/outputs']
         if os.path.exists(archives_dir):
             archive_dirs = [os.path.join(archives_dir, d) for d in os.listdir(archives_dir) if os.path.isdir(os.path.join(archives_dir, d))]
             options.extend(archive_dirs)
@@ -457,7 +457,7 @@ def main():
 
         st.info("👈 Please select a run from the sidebar")
 
-if __name__ == "__main__":
-    print("Please run :\n\npython -m swe_bench.streamlit_runner\n\n instead of running this file directly.")
-    print("This ensures proper process management and clean shutdown.")
-    sys.exit(1)
+# if __name__ == "__main__":
+#     print("Please run :\n\npython -m swe_bench.streamlit_runner\n\n instead of running this file directly.")
+#     print("This ensures proper process management and clean shutdown.")
+#     sys.exit(1)
