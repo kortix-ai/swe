@@ -41,7 +41,7 @@ def main():
                         help="Archive the current outputs before running")
     parser.add_argument("--no-archive", dest='archive', action='store_false',
                         help="Do not archive the current outputs before running")
-    parser.add_argument("--model-name", choices=["sonnet", "haiku", "deepseek", "gpt-4o", "qwen"], default="sonnet",
+    parser.add_argument("--model-name", choices=["sonnet", "haiku", "deepseek", "gpt-4o", "qwen", "groq-llama", "gemini-flash"], default="sonnet",
                         help="Model name to use (choices: sonnet, haiku, deepseek)")
     parser.add_argument("--run-eval", action="store_true", default=False,
                         help="Run evaluation step (default: False)")
@@ -163,7 +163,7 @@ def main():
     if not args.only_eval:
         # Run inference.py
         print("Running inference...")
-        inference_cmd = [sys.executable, "inference.py"]
+        inference_cmd = [sys.executable, "swe_bench/inference.py"]
         if args.instance_id:
             inference_cmd += ["--instance-id", args.instance_id]
         elif args.instances_file:
@@ -221,7 +221,7 @@ def main():
                 sys.exit(1)
 
         evaluation_cmd = [
-            sys.executable, "evaluation.py",
+            sys.executable, "swe_bench/evaluation.py",
             "--input-file", input_file,
             "--output-dir", args.output_dir,
             "--dataset", args.dataset,

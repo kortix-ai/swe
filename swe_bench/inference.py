@@ -221,7 +221,7 @@ def main():
                         help="Only join existing JSON files to JSONL, skip running tests")
     parser.add_argument("--max-iterations", type=int, default=10,
                         help="Maximum number of iterations")
-    parser.add_argument("--model-name", choices=["sonnet", "haiku", "deepseek", "gpt-4o", "qwen"], default="sonnet",
+    parser.add_argument("--model-name", choices=["sonnet", "haiku", "deepseek", "gpt-4o", "qwen", "groq-llama", "gemini-flash"], default="sonnet",
                         help="Model name to use (choices: sonnet, haiku, deepseek)")
     parser.add_argument('--num-workers', type=int, default=1,
                         help='Number of parallel workers')

@@ -241,7 +241,7 @@ if __name__ == "__main__":
         parser.add_argument("--threads-dir", required=True, help="Directory to store thread outputs")
         parser.add_argument("--debug", action="store_true", default=False, help="Enable debug mode")
         parser.add_argument("--max-iterations", type=int, default=31, help="Maximum number of iterations")
-        parser.add_argument("--model-name", choices=["sonnet", "haiku", "deepseek", "gpt-4o", "qwen"], default="sonnet",
+        parser.add_argument("--model-name", choices=["sonnet", "haiku", "deepseek", "gpt-4o", "qwen", "groq-llama", "gemini-flash"], default="sonnet",
                             help="Model name to use")
         args = parser.parse_args()
 
@@ -251,6 +251,8 @@ if __name__ == "__main__":
                 "deepseek": "deepseek/deepseek-chat",
                 "gpt-4o": "o1-preview",
                 "qwen": "openrouter/qwen/qwq-32b-preview",
+                "groq-llama": "groq/llama-3.3-70b-specdec",
+                "gemini-flash": "gemini/gemini-2.0-flash-exp",
             }
 
         model_name= model_mapping.get(args.model_name, "anthropic/claude-3-5-sonnet-latest")

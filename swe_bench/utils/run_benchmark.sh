@@ -84,3 +84,8 @@ python swe_runner.py --range 21 30 --dataset-type lite --max-iterations 10 --mod
 
 
 python swe_runner.py --range 1 40 --dataset-type lite --max-iterations 12 --model-name "sonnet" --execute-file agent/agent_state2.py --run-eval --num-worker 5 --install-packages --submission --disable-streamlit
+
+
+python swe_bench/swe_runner.py --instances-file swe_bench/utils/swing_testcases.json --dataset-type lite --max-iterations 3 --model-name "groq-llama" --execute-file agent/agent_state.py --run-eval --num-worker 1 --install-packages 
+
+python swe_bench/swe_runner.py --instances-file swe_bench/utils/swing_testcases.json --dataset-type lite --max-iterations 3 --model-name "gemini-flash" --execute-file agent/agent_state.py --run-eval --num-worker 1 --install-packages 
