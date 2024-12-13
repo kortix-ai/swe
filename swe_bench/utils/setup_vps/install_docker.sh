@@ -4,6 +4,7 @@ sudo apt-get install -y python3
 sudo apt-get install -y python3-pip
 sudo apt-get install -y python-is-python3
 sudo apt-get install -y python3-venv
+sudo apt install -y python3-poetry
 
 sudo apt install -y apt-transport-https ca-certificates curl software-properties-common
 curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg

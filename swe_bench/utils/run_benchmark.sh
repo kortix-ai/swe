@@ -88,4 +88,4 @@ python swe_runner.py --range 1 40 --dataset-type lite --max-iterations 12 --mode
 
 python swe_bench/swe_runner.py --instances-file swe_bench/utils/swing_testcases.json --dataset-type lite --max-iterations 3 --model-name "groq-llama" --execute-file agent/agent_state.py --run-eval --num-worker 1 --install-packages 
 
-python swe_bench/swe_runner.py --instances-file swe_bench/utils/swing_testcases.json --dataset-type lite --max-iterations 3  --execute-file agent/agent_state.py --run-eval --num-worker 1 --install-packages 
+python swe_bench/swe_runner.py --instances-file swe_bench/utils/swing_testcases.json --dataset-type verified --max-iterations 3  --execute-file agent/agent_state.py --run-eval --num-worker 2 --install-packages 

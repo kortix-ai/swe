@@ -8,11 +8,11 @@ import asyncio
 import logging
 from langfuse.decorators import langfuse_context, observe
 
-OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
-ANTHROPIC_API_KEY = os.environ.get('ANTHROPIC_API_KEY')
-GROQ_API_KEY = os.environ.get('GROQ_API_KEY')
-AGENTOPS_API_KEY = os.environ.get('AGENTOPS_API_KEY')
-OPENROUTER_API_KEY = os.environ.get('OPENROUTER_API_KEY')
+OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY', None)
+ANTHROPIC_API_KEY = os.environ.get('ANTHROPIC_API_KEY', None)
+GROQ_API_KEY = os.environ.get('GROQ_API_KEY', None)
+AGENTOPS_API_KEY = os.environ.get('AGENTOPS_API_KEY', None)
+OPENROUTER_API_KEY = os.environ.get('OPENROUTER_API_KEY', None)
 
 LANGFUSE_PUBLIC_KEY = os.environ.get('LANGFUSE_PUBLIC_KEY', '')
 LANGFUSE_SECRET_KEY = os.environ.get('LANGFUSE_SECRET_KEY', '')

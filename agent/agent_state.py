@@ -7,8 +7,8 @@ from agentpress.thread_manager import ThreadManager
 from agentpress.state_manager import StateManager
 import agentops
 
-agentops.init(os.environ['AGENTOPS_API_KEY'])
-agentops.init(os.environ['OPENROUTER_API_KEY'])
+agentops.init(os.environ.get('AGENTOPS_API_KEY', None))
+agentops.init(os.environ.get('OPENROUTER_API_KEY', None))
 
 system_prompt = """You are an autonomous expert software engineer tasked with making precise, high-quality modifications to resolve specific issues in a Python code repository. Your goal is to analyze the problem, propose solutions, and implement the best fix while maintaining code quality and efficiency.
 

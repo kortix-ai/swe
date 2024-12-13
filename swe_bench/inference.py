@@ -264,6 +264,14 @@ def main():
     elif args.instances_file is not None:
         instance_ids = get_instance_ids_from_file(args.instances_file)
         instances = dataset.filter(lambda x: x['instance_id'] in instance_ids)
+        
+        # Apply range filter if provided
+        if args.range is not None:
+            start_index, end_index = args.range
+            if start_index < 1 or end_index > len(instances) or start_index > end_index:
+                raise ValueError(f"Start index must be >= 1 and end index must be <= {len(instances)} and start must be <= end")
+            instances = instances.select(range(start_index - 1, end_index))  # Convert to 0-based index
+            
     elif args.test_index is not None:
         if args.test_index < 1 or args.test_index > len(dataset):
             raise ValueError(f"Test index must be between 1 and {len(dataset)}")

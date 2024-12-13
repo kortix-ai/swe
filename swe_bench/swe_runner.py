@@ -67,6 +67,18 @@ def main():
     
     args = parser.parse_args()
 
+    # Add validation for mutually exclusive arguments
+    instance_selection_count = sum(1 for x in [
+        args.instance_id is not None,
+        args.instances_file is not None and args.range is not None,  # Allow this combination
+        args.test_index is not None,
+        (args.instances_file is None and args.range is not None),  # Only count range if no instances file
+        args.num_examples is not None and args.instances_file is None  # Only count num_examples if no instances file
+    ] if x)
+
+    if instance_selection_count > 1:
+        parser.error("Please provide only one method to select instances: --instance-id, --test-index, --range (without --instances-file), or --num-examples (without --instances-file)")
+
     if args.rerun_failed:
         args.archive = False  # Disable archiving when rerunning failed tests
         evaluation_results_file = os.path.join(args.output_dir, 'evaluation_results.jsonl')
@@ -164,16 +176,21 @@ def main():
         # Run inference.py
         print("Running inference...")
         inference_cmd = [sys.executable, "swe_bench/inference.py"]
+        
+        # Update instance selection logic
         if args.instance_id:
             inference_cmd += ["--instance-id", args.instance_id]
         elif args.instances_file:
             inference_cmd += ["--instances-file", args.instances_file]
+            if args.range:  # Allow range to be used with instances-file
+                inference_cmd += ["--range", str(args.range[0]), str(args.range[1])]
         elif args.test_index:
             inference_cmd += ["--test-index", str(args.test_index)]
         elif args.range:
             inference_cmd += ["--range", str(args.range[0]), str(args.range[1])]
         else:
             inference_cmd += ["--num-examples", str(args.num_examples)]
+
         inference_cmd += ["--dataset", args.dataset]
         inference_cmd += ["--split", args.split]
         inference_cmd += ["--output-dir", args.output_dir]
