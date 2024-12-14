@@ -3,9 +3,9 @@ from asyncio import Lock
 from contextlib import asynccontextmanager
 import os, json, logging, uuid
 import aiofiles
-from agentpress.tools import ToolRegistry
-from agentpress.processors import XMLToolParser, XMLToolExecutor, XMLResultsAdder, LLMResponseProcessor
-from agentpress.llm import make_llm_api_call
+from agents.core.tools import ToolRegistry
+from agents.core.processors import XMLToolParser, XMLToolExecutor, XMLResultsAdder, LLMResponseProcessor
+from agents.core.llm import make_llm_api_call
 
 class ThreadManager:
     def __init__(self, store_file="state.json", threads_dir="threads"):
