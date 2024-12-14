@@ -2,7 +2,8 @@ from typing import Any, Dict, List, Optional, Union
 from asyncio import Lock
 from contextlib import asynccontextmanager
 import os, json, logging, uuid
-from agentpress.tools import ToolRegistry, ToolResult
+import aiofiles
+from agentpress.tools import ToolRegistry
 from agentpress.processors import XMLToolParser, XMLToolExecutor, XMLResultsAdder, LLMResponseProcessor
 from agentpress.llm import make_llm_api_call
 
@@ -18,19 +19,16 @@ class ThreadManager:
     @asynccontextmanager
     async def store_scope(self):
         async with self.lock:
-            try:
-                if os.path.exists(self.store_file):
-                    with open(self.store_file, 'r') as f:
-                        store = json.load(f)
-                else:
-                    store = {}
-                yield store
-                with open(self.store_file, 'w') as f:
-                    json.dump(store, f, indent=2)
-                logging.debug("Store saved")
-            except Exception as e:
-                logging.error("Store operation error", exc_info=True)
-                raise
+            if os.path.exists(self.store_file):
+                async with aiofiles.open(self.store_file, 'r') as f:
+                    content = await f.read()
+                    store = json.loads(content) if content.strip() else {}
+            else:
+                store = {}
+            yield store
+            async with aiofiles.open(self.store_file, 'w') as f:
+                await f.write(json.dumps(store, indent=2))
+            logging.debug("Store saved")
 
     async def set_state(self, key: str, data: Any) -> Any:
         async with self.store_scope() as store:
@@ -59,67 +57,86 @@ class ThreadManager:
             logging.info("Store cleared")
 
     async def create_thread(self) -> str:
-        thread_id = str(uuid.uuid4())
-        thread_path = os.path.join(self.threads_dir, f"{thread_id}.json")
-        history_path = os.path.join(self.threads_dir, f"{thread_id}_history.json")
-        empty = {"messages": []}
-        with open(thread_path, 'w') as f:
-            json.dump(empty, f)
-        with open(history_path, 'w') as f:
-            json.dump(empty, f)
-        return thread_id
+        async with self.lock:
+            thread_id = str(uuid.uuid4())
+            thread_path = os.path.join(self.threads_dir, f"{thread_id}.json")
+            history_path = os.path.join(self.threads_dir, f"{thread_id}_history.json")
+            empty = {"messages": []}
+            async with aiofiles.open(thread_path, 'w') as f:
+                await f.write(json.dumps(empty))
+            async with aiofiles.open(history_path, 'w') as f:
+                await f.write(json.dumps(empty))
+            return thread_id
 
     async def add_message(self, thread_id: str, message: Dict[str, Any], images: Optional[List[Dict[str, Any]]] = None):
         thread_path = os.path.join(self.threads_dir, f"{thread_id}.json")
         history_path = os.path.join(self.threads_dir, f"{thread_id}_history.json")
-        try:
-            with open(thread_path, 'r') as f:
-                thread = json.load(f)
-            msg = message.copy()
-            if images:
-                # Convert the message content into a list if it's a string, to append images
-                if isinstance(msg.get('content'), str):
-                    msg['content'] = [{"type": "text", "text": msg['content']}]
-                elif not isinstance(msg.get('content'), list):
-                    msg['content'] = []
-                for img in images:
-                    msg['content'].append({"type": "image_url", "image_url": {"url": f"data:{img['content_type']};base64,{img['base64']}", "detail": "high"}})
-            thread['messages'].append(msg)
-            with open(thread_path, 'w') as f:
-                json.dump(thread, f)
-            with open(history_path, 'r') as f:
-                history = json.load(f)
-            history['messages'].append(msg)
-            with open(history_path, 'w') as f:
-                json.dump(history, f)
-            logging.info(f"Added message to thread {thread_id}")
-        except Exception as e:
-            logging.error(f"Add message error: {e}")
-            raise
+        if not os.path.exists(thread_path) or not os.path.exists(history_path):
+            logging.error(f"Thread {thread_id} does not exist.")
+            raise FileNotFoundError(f"Thread {thread_id} does not exist.")
+
+        async with aiofiles.open(thread_path, 'r') as f:
+            thread_content = await f.read()
+        thread = json.loads(thread_content) if thread_content.strip() else {"messages": []}
+
+        msg = message.copy()
+        if images:
+            if isinstance(msg.get('content'), str):
+                msg['content'] = [{"type": "text", "text": msg['content']}]
+            elif not isinstance(msg.get('content'), list):
+                msg['content'] = []
+            for img in images:
+                msg['content'].append({"type": "image_url", "image_url": {"url": f"data:{img['content_type']};base64,{img['base64']}", "detail": "high"}})
+
+        thread['messages'].append(msg)
+        async with aiofiles.open(thread_path, 'w') as f:
+            await f.write(json.dumps(thread))
+
+        async with aiofiles.open(history_path, 'r') as f:
+            history_content = await f.read()
+        history = json.loads(history_content) if history_content.strip() else {"messages": []}
+        history['messages'].append(msg)
+        async with aiofiles.open(history_path, 'w') as f:
+            await f.write(json.dumps(history))
+        logging.info(f"Added message to thread {thread_id}")
 
     async def list_messages(self, thread_id: str, hide_tool_msgs: bool = False, only_latest_assistant: bool = False, regular_list: bool = True) -> List[Dict[str, Any]]:
         thread_path = os.path.join(self.threads_dir, f"{thread_id}.json")
-        try:
-            with open(thread_path, 'r') as f:
-                thread = json.load(f)
-            msgs = thread['messages']
-            if only_latest_assistant:
-                for msg in reversed(msgs):
-                    if msg.get('role') == 'assistant':
-                        return [msg]
-                return []
-            if hide_tool_msgs:
-                msgs = [{k: v for k, v in m.items() if k != 'tool_calls'} for m in msgs if m.get('role') != 'tool']
-            if regular_list:
-                msgs = [m for m in msgs if m.get('role') in ['system','assistant','tool','user']]
-            return msgs
-        except FileNotFoundError:
+        if not os.path.exists(thread_path):
+            logging.warning(f"Thread {thread_id} not found.")
+            return []
+        async with aiofiles.open(thread_path, 'r') as f:
+            content = await f.read()
+        thread = json.loads(content) if content.strip() else {"messages": []}
+        msgs = thread.get('messages', [])
+
+        if only_latest_assistant:
+            for msg in reversed(msgs):
+                if msg.get('role') == 'assistant':
+                    return [msg]
             return []
 
-    async def run_thread(self, thread_id: str, system_message: Dict[str, Any], model_name: str, temperature: float = 0, max_tokens: Optional[int] = None, execute_tools: bool = True, parallel_tool_execution: bool = True, agentops_session: Any = None, stop_sequences: List[str] = None) -> Union[Dict[str, Any], Any]:
+        if hide_tool_msgs:
+            msgs = [m for m in msgs if m.get('role') != 'tool']
+
+        if regular_list:
+            allowed_roles = {'system','assistant','tool','user'}
+            msgs = [m for m in msgs if m.get('role') in allowed_roles]
+
+        return msgs
+
+    async def run_thread(
+        self, thread_id: str,
+        system_message: Dict[str, Any],
+        model_name: str,
+        temperature: float = 0,
+        max_tokens: Optional[int] = None,
+        execute_tools: bool = True,
+        parallel_tool_execution: bool = True,
+        stop_sequences: List[str] = None
+    ) -> Union[Dict[str, Any], Any]:
         try:
             msgs = await self.list_messages(thread_id)
-            # Ensure if last message is assistant, we prompt user to continue
             if msgs and msgs[-1].get('role') == 'assistant':
                 msgs.append({"role": "user", "content": "Continue! You must always use a tool."})
 
@@ -133,14 +150,13 @@ class ThreadManager:
                 prepared, model_name,
                 temperature=temperature,
                 max_tokens=max_tokens,
-                tools=None,  # not needed for XML approach
+                tools=None,
                 tool_choice=None,
-                agentops_session=agentops_session,
                 stop_sequences=stop_sequences
             )
 
             await processor.process_response(llm_resp, execute_tools)
             return llm_resp
         except Exception as e:
-            logging.error(f"Run thread error: {e}")
+            logging.error(f"Run thread error: {e}", exc_info=True)
             return {"status": "error", "message": str(e)}

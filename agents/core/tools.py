@@ -5,6 +5,7 @@ from enum import Enum
 import json
 import inspect
 import logging
+import asyncio
 import re
 
 class SchemaType(Enum):
@@ -54,6 +55,8 @@ class Tool(ABC):
         for name, method in inspect.getmembers(self, predicate=inspect.ismethod):
             if hasattr(method, 'tool_schemas'):
                 self._schemas[name] = method.tool_schemas
+            else:
+                logging.debug(f"Method {name} has no tool_schemas attribute.")
 
     def get_schemas(self) -> Dict[str, List[ToolSchema]]:
         return self._schemas
@@ -72,36 +75,42 @@ def _add_schema(func, schema: ToolSchema):
     return func
 
 
-def xml_schema(tag_name: str, mappings: List[Dict[str, str]] = None, example: str = None):
+def xml_schema(tag_name: str, mappings: Optional[List[Dict[str, str]]] = None, example: Optional[str] = None):
+    if mappings is None:
+        mappings = []
     def decorator(func):
         xml_schema_obj = XMLTagSchema(tag_name, example=example)
         if mappings:
             for m in mappings:
-                xml_schema_obj.add_mapping(m["param_name"], m.get("node_type", "element"), m.get("path", "."))
+                if "param_name" not in m:
+                    logging.error("Mapping missing 'param_name'.")
+                    continue
+            xml_schema_obj.add_mapping(m["param_name"], m.get("node_type", "element"), m.get("path", "."))
         return _add_schema(func, ToolSchema(SchemaType.XML, {}, xml_schema=xml_schema_obj))
     return decorator
 
 
 class ToolRegistry:
-    _instance = None
+    def __init__(self):
+        self.tools = {}
+        self.xml_tools = {}
+        self.lock = asyncio.Lock()
 
-    def __new__(cls):
-        if not cls._instance:
-            cls._instance = super().__new__(cls)
-            cls._instance.tools = {}
-            cls._instance.xml_tools = {}
-        return cls._instance
-
-    def register_tool(self, tool_class: Type[Tool], function_names: Optional[List[str]] = None, **kwargs):
-        tool_instance = tool_class(**kwargs)
-        schemas = tool_instance.get_schemas()
-        logging.info(f"Registering {tool_class.__name__} with schemas {list(schemas.keys())}")
-        for func_name, schema_list in schemas.items():
-            if not function_names or func_name in function_names:
-                for schema in schema_list:
-                    if schema.schema_type == SchemaType.XML and schema.xml_schema:
-                        self.xml_tools[schema.xml_schema.tag_name] = {"instance": tool_instance, "method": func_name, "schema": schema}
-                        logging.info(f"Registered XML tag {schema.xml_schema.tag_name} -> {func_name}")
+    async def register_tool(self, tool_class: Type[Tool], function_names: Optional[List[str]] = None, **kwargs):
+        async with self.lock:
+            tool_instance = tool_class(**kwargs)
+            schemas = tool_instance.get_schemas()
+            logging.info(f"Registering {tool_class.__name__} with schemas {list(schemas.keys())}")
+            for func_name, schema_list in schemas.items():
+                if not function_names or func_name in function_names:
+                    for schema in schema_list:
+                        if schema.schema_type == SchemaType.XML and schema.xml_schema:
+                            self.xml_tools[schema.xml_schema.tag_name] = {
+                                "instance": tool_instance,
+                                "method": func_name,
+                                "schema": schema
+                            }
+                            logging.debug(f"Registered XML tag {schema.xml_schema.tag_name} -> {func_name}")
 
     def get_available_functions(self) -> Dict[str, Callable]:
         funcs = {}

@@ -1,4 +1,4 @@
-from typing import Union, Dict, Any
+from typing import Union, Dict, Any, List, Optional
 import litellm, os, json, openai, asyncio, logging
 from openai import OpenAIError
 from langfuse.decorators import langfuse_context
@@ -10,20 +10,28 @@ LANGFUSE_PUBLIC_KEY = os.getenv('LANGFUSE_PUBLIC_KEY', '')
 LANGFUSE_SECRET_KEY = os.getenv('LANGFUSE_SECRET_KEY', '')
 LANGFUSE_HOST = os.getenv('LANGFUSE_HOST', 'https://cloud.langfuse.com')
 
-os.environ['LANGFUSE_PUBLIC_KEY'] = LANGFUSE_PUBLIC_KEY
-os.environ['LANGFUSE_SECRET_KEY'] = LANGFUSE_SECRET_KEY
-os.environ['LANGFUSE_HOST'] = LANGFUSE_HOST
-os.environ['LITELLM_LOG'] = 'ERROR'
-os.environ['LANGFUSE_LOG_LEVEL'] = 'ERROR'
 
+litellm.set_verbose(False)
 litellm.success_callback = ["langfuse"]
 litellm.failure_callback = ["langfuse"]
 
 
 registry = ToolRegistry()
 
-async def make_llm_api_call(messages: list, model_name: str, response_format: Any = None, temperature: float = 0, max_tokens: int = None, tools: list = None, tool_choice: str = "auto", api_key: str = None, api_base: str = None, agentops_session: Any = None, top_p: float = None, stop_sequences: list = None) -> Union[Dict[str, Any], Any]:
-    litellm.set_verbose = False
+async def make_llm_api_call(
+    messages: List[Dict[str, Any]],
+    model_name: str,
+    response_format: Optional[Any] = None,
+    temperature: float = 0.0,
+    max_tokens: Optional[int] = None,
+    tools: Optional[List[Any]] = None,
+    tool_choice: str = "auto",
+    api_key: Optional[str] = None,
+    api_base: Optional[str] = None,
+    top_p: Optional[float] = None,
+    stop_sequences: Optional[List[str]] = None
+) -> Union[Dict[str, Any], Any]:
+    litellm.set_verbose(True)
 
     async def attempt_api_call(api_call_func, max_attempts=3):
         for attempt in range(max_attempts):
@@ -38,7 +46,7 @@ async def make_llm_api_call(messages: list, model_name: str, response_format: An
             except json.JSONDecodeError:
                 logging.error("JSON decoding failed, retrying...")
                 await asyncio.sleep(5)
-        raise Exception("API call failed after retries.")
+        raise RuntimeError("API call failed after maximum retry attempts.")
 
     async def api_call():
         trace_id = langfuse_context.get_current_trace_id()
@@ -72,6 +80,6 @@ async def make_llm_api_call(messages: list, model_name: str, response_format: An
                 m_copy["content"] = [{"type": "text", "text": m["content"], "cache_control": {"type": "ephemeral"}}] if isinstance(m["content"], str) else m["content"]
                 processed.append(m_copy)
             params["messages"] = processed
-        return await (agentops_session.patch(litellm.acompletion)(**params) if agentops_session else litellm.acompletion(**params))
+        return await litellm.acompletion(**params)
 
     return await attempt_api_call(api_call)

@@ -1,5 +1,6 @@
 from typing import Dict, Any, List, Optional, Callable, Union, AsyncGenerator, Set, Tuple
-import asyncio, json, logging, re
+import asyncio, json, logging
+import xml.etree.ElementTree as ET
 from abc import ABC, abstractmethod
 from agentpress.tools import ToolResult, ToolRegistry
 
@@ -34,31 +35,11 @@ class XMLToolParser(ToolParserBase):
     def __init__(self, tool_registry: Optional[ToolRegistry] = None):
         self.tool_registry = tool_registry or ToolRegistry()
 
-    def _extract_tag_content(self, xml: str, tag: str) -> Tuple[Optional[str], Optional[str]]:
-        try:
-            start = xml.find(f'<{tag}')
-            if start == -1:
-                return None, xml
-            end = xml.find(f'</{tag}>', start)
-            if end == -1:
-                return None, xml
-            content = xml[start:end + len(f'</{tag}>')]
-            remaining = xml[end + len(f'</{tag}>'):]
-            return content, remaining
-        except Exception as e:
-            logging.error(f"XMLToolParser extraction error: {e}")
-            return None, xml
-
-    def _extract_attribute(self, tag: str, attr: str) -> Optional[str]:
-        match = re.search(fr'{attr}="([^"]*)"', tag)
-        return match.group(1) if match else None
 
     async def _parse_xml_to_tool_call(self, xml: str) -> Optional[Dict[str, Any]]:
         try:
-            tag_match = re.match(r'<([^\s>]+)', xml)
-            if not tag_match:
-                return None
-            tag = tag_match.group(1)
+            root = ET.fromstring(xml)
+            tag = root.tag
             tool_info = self.tool_registry.get_xml_tool(tag)
             if not tool_info or not tool_info['schema'].xml_schema:
                 return None
@@ -66,26 +47,22 @@ class XMLToolParser(ToolParserBase):
             params = {}
             for m in schema.mappings:
                 if m.node_type == "attribute":
-                    val = self._extract_attribute(xml, m.path)
-                    if val:
-                        params[m.param_name] = val
+                    value = root.attrib.get(m.path)
+                    if value:
+                        params[m.param_name] = value
                 elif m.node_type == "element":
-                    content, _ = self._extract_tag_content(xml, m.path)
-                    if content:
-                        inner_text = re.sub(r'<[^>]+>', '', content).strip()
-                        params[m.param_name] = inner_text
+                    element = root.find(m.path)
+                    if element is not None and element.text:
+                        params[m.param_name] = element.text.strip()
                 elif m.node_type == "content" and m.path == ".":
-                    content, _ = self._extract_tag_content(xml, tag)
-                    if content:
-                        inner_text = re.sub(r'<[^>]+>', '', content).strip()
-                        params[m.param_name] = inner_text
+                    params[m.param_name] = ''.join(root.itertext()).strip()
             # Check all required params
-            for mapping in schema.mappings:
-                if mapping.param_name not in params:
+                if m.param_name not in params:
+                    logging.warning(f"Missing required parameter: {m.param_name}")
                     return None
             return {"id": f"tool_{hash(xml)}", "type": "function", "function": {"name": tool_info['method'], "arguments": json.dumps(params)}}
-        except Exception as e:
-            logging.error(f"XMLToolParser parse error: {e}")
+        except ET.ParseError as e:
+            logging.error(f"XML parsing error: {e}")
             return None
 
     async def parse_response(self, response: Any) -> Dict[str, Any]:
@@ -95,17 +72,21 @@ class XMLToolParser(ToolParserBase):
         try:
             # Extract all registered tags
             search_content = content
+            search_content = content
             for tag in self.tool_registry.xml_tools.keys():
-                # Keep extracting until no more tags found
                 while f'<{tag}' in search_content:
-                    xml_chunk, remaining = self._extract_tag_content(search_content, tag)
-                    if xml_chunk:
-                        tc = await self._parse_xml_to_tool_call(xml_chunk)
-                        if tc:
-                            tool_calls.append(tc)
-                        search_content = remaining
-                    else:
+                    xml_chunk_start = search_content.find(f'<{tag}')
+                    if xml_chunk_start == -1:
                         break
+                    close_tag = f'</{tag}>'
+                    xml_chunk_end = search_content.find(close_tag, xml_chunk_start)
+                    if xml_chunk_end == -1:
+                        break
+                    xml_chunk = search_content[xml_chunk_start:xml_chunk_end+len(close_tag)]
+                    tc = await self._parse_xml_to_tool_call(xml_chunk)
+                    if tc:
+                        tool_calls.append(tc)
+                    search_content = search_content[xml_chunk_end+len(close_tag):]
             if tool_calls:
                 message["tool_calls"] = tool_calls
         except Exception as e:

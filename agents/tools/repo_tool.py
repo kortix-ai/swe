@@ -1,5 +1,5 @@
-import asyncio, base64, shlex
-from typing import Optional
+import asyncio, os, fnmatch, json, shlex
+from typing import Optional, List, Dict, Any
 from agents.core.tools import Tool, ToolResult, xml_schema
 from agents.core.thread_manager import ThreadManager
 
@@ -7,7 +7,7 @@ class BashExecutor:
     def __init__(self, container: str):
         self.container = container
 
-    async def execute(self, cmd: str, inp=None):
+    async def execute(self, cmd: str, inp: Optional[bytes] = None):
         p = await asyncio.create_subprocess_exec(
             'docker', 'exec', '-i', self.container, '/bin/bash', '-c', cmd,
             stdin=asyncio.subprocess.PIPE if inp else None,
@@ -17,6 +17,7 @@ class BashExecutor:
             stdout, stderr = await asyncio.wait_for(p.communicate(inp), timeout=120)
         except asyncio.TimeoutError:
             p.kill()
+            await p.wait()
             return '', 'Command timed out', 1
         return stdout.decode('utf-8','replace'), stderr.decode('utf-8','replace'), p.returncode
 
@@ -26,38 +27,42 @@ class RepositoryTools(Tool):
         self.container = container
         self.thread_manager = thread_manager
         self.executor = BashExecutor(container)
+        self.workspace_lock = asyncio.Lock()
 
-    async def get_workspace(self):
-        w = await self.thread_manager.get_state("workspace")
-        return w if w else {}
+    async def get_workspace(self) -> Dict[str, Any]:
+        async with self.workspace_lock:
+            w = await self.thread_manager.get_state("workspace")
+            return w if w else {}
 
-    async def set_workspace(self, w):
-        await self.thread_manager.set_state("workspace", w)
+    async def set_workspace(self, w: Dict[str, Any]) -> None:
+        async with self.workspace_lock:
+            await self.thread_manager.set_state("workspace", w)
 
-    async def fetch_folder(self, path: str, depth: int):
-        code = base64.b64encode(b'''
-import os, fnmatch, sys
-def exclude(p,pats):return any(fnmatch.fnmatch(p,"*"+pat)for pat in pats)
-def list_dir(p,d,e,c=1):
-    r=[]
-    try:
-        for it in sorted(os.listdir(p)):
-            if it.startswith('.')or exclude(os.path.join(p,it),e):continue
-            fp=os.path.join(p,it)
-            r.append(fp)
-            if os.path.isdir(fp)and c<d:r.extend(list_dir(fp,d,e,c+1))
-    except:pass
-    return r
-p,excl,depth=sys.argv[1],sys.argv[2].split(','),int(sys.argv[3])
-print(f'<directory path="{p}">')
-for i in list_dir(p,depth,excl):print(i)
-print('</directory>')
-''').decode()
-        cmd = f"echo {shlex.quote(code)}|base64 -d|python3 - {shlex.quote(path)} {shlex.quote('.rst,.pyc')} {depth}"
-        stdout, stderr, c = await self.executor.execute(cmd)
-        if c==0 and not stderr.strip():
-            return self.success_response(stdout.strip())
-        return self.fail_response(stderr.strip())
+    def list_directory(self, path: str, depth: int, exclusions: List[str], current_depth: int = 1) -> List[str]:
+        if current_depth > depth:
+            return []
+        entries = []
+        try:
+            for entry in sorted(os.listdir(path)):
+                if entry.startswith('.') or any(fnmatch.fnmatch(os.path.join(path, entry), f"*{pat}") for pat in exclusions):
+                    continue
+                full_path = os.path.join(path, entry)
+                entries.append(full_path)
+                if os.path.isdir(full_path):
+                    entries.extend(self.list_directory(full_path, depth, exclusions, current_depth + 1))
+        except Exception as e:
+            # Log and return partial result
+            return entries
+        return entries
+
+    async def fetch_folder(self, path: str, depth: int, exclusions: Optional[List[str]] = None) -> ToolResult:
+        exclusions = exclusions or ['.rst', '.pyc']
+        try:
+            directory_structure = self.list_directory(path, depth, exclusions)
+            xml_output = f'<directory path="{path}">\n' + '\n'.join(directory_structure) + '\n</directory>'
+            return self.success_response(xml_output)
+        except Exception as e:
+            return self.fail_response(str(e))
 
     @xml_schema(
         tag_name="view_folder",
@@ -67,16 +72,17 @@ print('</directory>')
         ]
     )
     async def view_folder(self, path: str, depth: Optional[int]=2) -> ToolResult:
-        w = await self.get_workspace()
-        w.setdefault("open_folders", {})
-        if path not in w["open_folders"]:
-            w["open_folders"][path] = depth or 2
-            await self.set_workspace(w)
-            return self.success_response(f"Folder {path} added.")
-        return self.success_response(f"Folder {path} already open.")
+        async with self.workspace_lock:
+            w = await self.get_workspace()
+            w.setdefault("open_folders", {})
+            if path not in w["open_folders"]:
+                w["open_folders"][path] = depth or 2
+                await self.set_workspace(w)
+                return self.success_response(f"Folder {path} added.")
+            return self.success_response(f"Folder {path} already open.")
 
-    @xml_schema(tag_name="SUBMIT_FINAL_SOLUTION_ONLY_IF_ALL_TESTS_PASS", mappings=[])
-    async def SUBMIT_FINAL_SOLUTION_ONLY_IF_ALL_TESTS_PASS(self) -> ToolResult:
+    @xml_schema(tag_name="submit_final_solution_only_if_all_tests_pass", mappings=[])
+    async def submit_final_solution_only_if_all_tests_pass(self) -> ToolResult:
         return self.success_response("Task terminated, Agent stopped!")
 
     @xml_schema(
