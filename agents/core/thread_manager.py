@@ -7,7 +7,7 @@ from agentpress.processors import XMLToolParser, XMLToolExecutor, XMLResultsAdde
 from agentpress.llm import make_llm_api_call
 
 class ThreadManager:
-    def __init__(self, store_file="/home/nightfury/projects/test/new_agent_version/state.json", threads_dir="/home/nightfury/projects/test/new_agent_version/threads"):
+    def __init__(self, store_file="state.json", threads_dir="threads"):
         self.lock = Lock()
         self.store_file = store_file
         self.threads_dir = threads_dir
@@ -116,7 +116,7 @@ class ThreadManager:
         except FileNotFoundError:
             return []
 
-    async def run_thread(self, thread_id: str, system_message: Dict[str, Any], model_name: str, temperature: float = 0, max_tokens: Optional[int] = None, execute_tools: bool = True, stream: bool = False, execute_tools_on_stream: bool = False, parallel_tool_execution: bool = True, agentops_session: Any = None, stop_sequences: List[str] = None) -> Union[Dict[str, Any], Any]:
+    async def run_thread(self, thread_id: str, system_message: Dict[str, Any], model_name: str, temperature: float = 0, max_tokens: Optional[int] = None, execute_tools: bool = True, parallel_tool_execution: bool = True, agentops_session: Any = None, stop_sequences: List[str] = None) -> Union[Dict[str, Any], Any]:
         try:
             msgs = await self.list_messages(thread_id)
             # Ensure if last message is assistant, we prompt user to continue
@@ -133,15 +133,11 @@ class ThreadManager:
                 prepared, model_name,
                 temperature=temperature,
                 max_tokens=max_tokens,
-                tools=None, # not needed for XML approach
+                tools=None,  # not needed for XML approach
                 tool_choice=None,
                 agentops_session=agentops_session,
-                stream=stream,
                 stop_sequences=stop_sequences
             )
-
-            if stream:
-                return processor.process_stream(llm_resp, execute_tools, execute_tools_on_stream)
 
             await processor.process_response(llm_resp, execute_tools)
             return llm_resp

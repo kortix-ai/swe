@@ -22,8 +22,8 @@ litellm.failure_callback = ["langfuse"]
 
 registry = ToolRegistry()
 
-async def make_llm_api_call(messages: list, model_name: str, response_format: Any = None, temperature: float = 0, max_tokens: int = None, tools: list = None, tool_choice: str = "auto", api_key: str = None, api_base: str = None, agentops_session: Any = None, stream: bool = False, top_p: float = None, stop_sequences: list = None) -> Union[Dict[str, Any], Any]:
-    litellm.set_verbose = True
+async def make_llm_api_call(messages: list, model_name: str, response_format: Any = None, temperature: float = 0, max_tokens: int = None, tools: list = None, tool_choice: str = "auto", api_key: str = None, api_base: str = None, agentops_session: Any = None, top_p: float = None, stop_sequences: list = None) -> Union[Dict[str, Any], Any]:
+    litellm.set_verbose = False
 
     async def attempt_api_call(api_call_func, max_attempts=3):
         for attempt in range(max_attempts):
@@ -49,7 +49,6 @@ async def make_llm_api_call(messages: list, model_name: str, response_format: An
             "temperature": temperature,
             "response_format": response_format,
             "top_p": top_p,
-            "stream": stream,
             "metadata": metadata
         }
         if stop_sequences:

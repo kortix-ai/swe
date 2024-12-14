@@ -9,10 +9,6 @@ class ToolParserBase(ABC):
     async def parse_response(self, response: Any) -> Dict[str, Any]:
         pass
 
-    @abstractmethod
-    async def parse_stream(self, response_chunk: Any, tool_calls_buffer: Dict[int, Dict]):
-        pass
-
 
 class ToolExecutorBase(ABC):
     @abstractmethod
@@ -116,31 +112,6 @@ class XMLToolParser(ToolParserBase):
             logging.error(f"XMLToolParser response parse error: {e}")
         return message
 
-    async def parse_stream(self, response_chunk: Any, tool_calls_buffer: Dict[int, Dict]) -> (Optional[Dict[str, Any]], bool):
-        if 'xml_buffer' not in tool_calls_buffer:
-            tool_calls_buffer['xml_buffer'] = ''
-        content = getattr(response_chunk.choices[0].delta, 'content', '')
-        is_complete = hasattr(response_chunk.choices[0], 'finish_reason') and bool(response_chunk.choices[0].finish_reason)
-        if content:
-            tool_calls_buffer['xml_buffer'] += content
-            tool_calls = []
-            # Attempt extracting all tags repeatedly until no more found
-            updated = True
-            while updated:
-                updated = False
-                for tag in list(self.tool_registry.xml_tools.keys()):
-                    if f'<{tag}' in tool_calls_buffer['xml_buffer']:
-                        xml_chunk, remaining = self._extract_tag_content(tool_calls_buffer['xml_buffer'], tag)
-                        if xml_chunk:
-                            tc = await self._parse_xml_to_tool_call(xml_chunk)
-                            if tc:
-                                tool_calls.append(tc)
-                            tool_calls_buffer['xml_buffer'] = remaining
-                            updated = True
-            if tool_calls:
-                return {"role": "assistant", "content": content, "tool_calls": tool_calls}, is_complete
-        return None, is_complete
-
 
 class XMLToolExecutor(ToolExecutorBase):
     def __init__(self, parallel: bool = True, tool_registry: Optional[ToolRegistry] = None):
@@ -234,46 +205,8 @@ class LLMResponseProcessor:
         self.tool_parser = tool_parser or XMLToolParser()
         self.tool_executor = tool_executor or XMLToolExecutor(parallel=parallel_tool_execution)
         self.results_adder = results_adder or XMLResultsAdder(thread_manager)
-        self.tool_calls_buffer = {}
         self.processed_tool_calls = set()
         self.content_buffer = ""
-
-    async def process_stream(self, response_stream: AsyncGenerator, execute_tools: bool = True, execute_tools_on_stream: bool = False) -> AsyncGenerator:
-        async for chunk in response_stream:
-            try:
-                if hasattr(chunk.choices[0].delta, 'content') and chunk.choices[0].delta.content:
-                    self.content_buffer += chunk.choices[0].delta.content
-                if hasattr(chunk.choices[0].delta, 'tool_calls'):
-                    parsed_message, is_complete = await self.tool_parser.parse_stream(chunk, self.tool_calls_buffer)
-                    if parsed_message and 'tool_calls' in parsed_message:
-                        self.tool_calls_accumulated = parsed_message['tool_calls']
-                if execute_tools and hasattr(self, 'tool_calls_accumulated'):
-                    new_tool_calls = [tc for tc in self.tool_calls_accumulated if tc['id'] not in self.processed_tool_calls]
-                    if new_tool_calls:
-                        if execute_tools_on_stream:
-                            results = await self.tool_executor.execute_tool_calls(new_tool_calls, self.available_functions, self.thread_id, self.processed_tool_calls)
-                            for result in results:
-                                await self.results_adder.add_tool_result(self.thread_id, result)
-                                self.processed_tool_calls.add(result['tool_call_id'])
-
-                msg_tool_calls = getattr(self, 'tool_calls_accumulated', None)
-                if not hasattr(self, '_message_added'):
-                    await self.results_adder.add_initial_response(self.thread_id, self.content_buffer, msg_tool_calls)
-                    self._message_added = True
-                else:
-                    await self.results_adder.update_response(self.thread_id, self.content_buffer, msg_tool_calls)
-
-                yield chunk
-            except Exception as e:
-                logging.error(f"Stream processing error: {e}")
-
-        if not execute_tools_on_stream and hasattr(self, 'tool_calls_accumulated'):
-            remaining_tool_calls = [tc for tc in self.tool_calls_accumulated if tc['id'] not in self.processed_tool_calls]
-            if remaining_tool_calls:
-                results = await self.tool_executor.execute_tool_calls(remaining_tool_calls, self.available_functions, self.thread_id, self.processed_tool_calls)
-                for result in results:
-                    await self.results_adder.add_tool_result(self.thread_id, result)
-                    self.processed_tool_calls.add(result['tool_call_id'])
 
     async def process_response(self, response: Any, execute_tools: bool = True) -> None:
         try:
