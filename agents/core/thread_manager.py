@@ -160,3 +160,22 @@ class ThreadManager:
         except Exception as e:
             logging.error(f"Run thread error: {e}", exc_info=True)
             return {"status": "error", "message": str(e)}
+
+if __name__ == "__main__":
+    import asyncio
+
+    async def main():
+        manager = ThreadManager()
+        thread_id = await manager.create_thread()
+        print(f"Created thread with ID: {thread_id}")
+
+        # Add a test message
+        message = {"role": "user", "content": "Hello, world!"}
+        await manager.add_message(thread_id, message)
+        print(f"Added message: {message}")
+
+        # List messages
+        messages = await manager.list_messages(thread_id)
+        print(f"Messages in thread {thread_id}: {messages}")
+
+    asyncio.run(main())

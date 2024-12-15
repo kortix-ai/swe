@@ -11,9 +11,9 @@ LANGFUSE_SECRET_KEY = os.getenv('LANGFUSE_SECRET_KEY', '')
 LANGFUSE_HOST = os.getenv('LANGFUSE_HOST', 'https://cloud.langfuse.com')
 
 
-litellm.set_verbose(False)
 litellm.success_callback = ["langfuse"]
 litellm.failure_callback = ["langfuse"]
+os.environ['LITELLM_LOG'] = 'ERROR'
 
 
 registry = ToolRegistry()
@@ -31,7 +31,7 @@ async def make_llm_api_call(
     top_p: Optional[float] = None,
     stop_sequences: Optional[List[str]] = None
 ) -> Union[Dict[str, Any], Any]:
-    litellm.set_verbose(True)
+    litellm.set_verbose = True
 
     async def attempt_api_call(api_call_func, max_attempts=3):
         for attempt in range(max_attempts):

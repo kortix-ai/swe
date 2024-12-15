@@ -2,7 +2,7 @@ from typing import Dict, Any, List, Optional, Callable, Union, AsyncGenerator, S
 import asyncio, json, logging
 import xml.etree.ElementTree as ET
 from abc import ABC, abstractmethod
-from agents.core.tools import ToolResult, ToolRegistry
+from agents.core.tools import ToolResult, ToolRegistry, Tool, xml_schema
 
 
 class ToolParserBase(ABC):

@@ -132,3 +132,16 @@ class ToolRegistry:
 
     def get_xml_tool(self, tag_name: str) -> Dict[str, Any]:
         return self.xml_tools.get(tag_name, {})
+
+    def get_xml_examples(self) -> Dict[str, str]:
+        """Get all XML tag examples.
+        
+        Returns:
+            Dict mapping tag names to their example usage
+        """
+        examples = {}
+        for tool_info in self.xml_tools.values():
+            schema = tool_info['schema']
+            if schema.xml_schema and schema.xml_schema.example:
+                examples[schema.xml_schema.tag_name] = schema.xml_schema.example
+        return examples
