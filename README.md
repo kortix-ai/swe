@@ -1,5 +1,12 @@
 # Kortix SWE Bench
 
+![Leaderboard](images/leaderboard.png)
+
+> "WE DO THIS NOT BECAUSE IT IS EASY,
+> BUT BECAUSE WE THOUGHT
+> IT WOULD BE EASY"
+
+
 A streamlined framework for testing coding agents on SWE-Bench with minimal setup overhead. This tool handles all the infrastructure complexities (Docker, dataset management, tool interactions) so you can focus on developing and testing your agent's core logic.
 
 This Repo contains:
